@@ -119,10 +119,10 @@ These findings come from the provided synthetic dataset, so they should be inter
    The small cross-validated R-squared from the metadata-only model means fields like category, thumbnail style, and month explain only a small part of view variation. This points to missing features, not failed modelling.
 
 4. **Clusters are more useful than single averages.**
-   The clustering step separates broad reach, high engagement, niche sticky content, and more balanced performers — a better decision tool than one overall average.
+   The clustering step separates broad reach, high engagement, niche sticky content, and more balanced performers, a better decision tool than one overall average.
 
 5. **Anomalies are worth editorial review.**
-   The anomaly detector highlights unusual combinations — very high engagement on relatively low reach, or the opposite.
+   The anomaly detector highlights unusual combinations, very high engagement on relatively low reach, or the opposite.
 
 ## Technical Decisions
 
@@ -205,8 +205,13 @@ These findings come from the provided synthetic dataset, so they should be inter
     └── sample_videos.csv               # 1 000 rows, 10 columns
 ```
 
-## Given More Time
-- Add user authentication and multi-tenant data isolation
+## Possible Improvements
 - Add persistent storage (PostgreSQL) with migration support
 - Add streaming upload progress for large CSV files
-- Add scheduled report delivery via email
+- Dockerise both services with a `docker-compose.yml` for one-command setup
+- Add user authentication and role-based access control
+- Add time-series forecasting to predict future performance
+- Replace TF-IDF with sentence-transformer embeddings for richer title similarity
+- Integrate with YouTube / TikTok APIs for live data ingestion
+- Add scheduled report delivery via email (daily/weekly digests)
+- Export reports in additional formats (Excel, JSON, Google Sheets)
