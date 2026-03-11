@@ -1,3 +1,9 @@
+/**
+ * @file MetricCard component.
+ * Displays a single KPI value with a label and optional explanatory
+ * hint text.  Used in the overview grid at the top of the dashboard.
+ */
+
 import PropTypes from 'prop-types'
 
 export default function MetricCard({ label, value, hint }) {

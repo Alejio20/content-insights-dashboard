@@ -1,3 +1,13 @@
+"""
+FastAPI application entry point.
+
+Defines REST endpoints and a WebSocket channel for the Content
+Performance Insights Dashboard.  Endpoints cover data ingestion,
+summary metrics, trend analysis, clustering, anomaly detection,
+similarity search, A/B testing, experiment tracking, and
+downloadable CSV/PDF reports.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -13,6 +23,7 @@ from .store import data_store, ws_manager
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Content Performance Insights Dashboard API", version="2.0.0")
+# Allow all origins so the Vite dev server can reach the API without proxy issues.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -24,6 +35,7 @@ app.add_middleware(
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Catch-all handler that logs the traceback and returns a safe 500 response."""
     logger.exception("Unhandled error on %s %s", request.method, request.url.path)
     return JSONResponse(
         status_code=500,
@@ -33,10 +45,12 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 
 @app.exception_handler(DataValidationError)
 async def validation_exception_handler(request: Request, exc: DataValidationError) -> JSONResponse:
+    """Return a 422 with the validation message when uploaded data is malformed."""
     return JSONResponse(status_code=422, content={"detail": str(exc)})
 
 
 def _service() -> AnalyticsService:
+    """Shortcut: build a fresh AnalyticsService from the current dataset."""
     return AnalyticsService(data_store.result.frame)
 
 
@@ -45,6 +59,7 @@ def parse_filters(
     start_date: str | None = Query(default=None),
     end_date: str | None = Query(default=None),
 ) -> FilterOptions:
+    """FastAPI dependency that extracts filter query params into a typed dataclass."""
     return FilterOptions(category=category, start_date=start_date, end_date=end_date)
 
 
@@ -52,6 +67,7 @@ def parse_filters(
 
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket) -> None:
+    """Keep the WebSocket open so the server can push data-refresh events to the dashboard."""
     await ws_manager.connect(ws)
     try:
         while True:
@@ -122,6 +138,7 @@ def similar_videos(video_id: int, top_n: int = Query(default=5, ge=1, le=20)) ->
 
 @app.post("/upload")
 async def upload_csv(file: UploadFile) -> dict:
+    """Accept a CSV upload, hot-swap the dataset, and notify connected dashboards."""
     if not file.filename or not file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="Only .csv files are accepted")
 
@@ -131,6 +148,7 @@ async def upload_csv(file: UploadFile) -> dict:
 
     result = await data_store.replace_from_bytes(raw, file.filename)
 
+    # Broadcast a refresh signal so every open dashboard reloads automatically.
     await ws_manager.broadcast({"type": "data_refreshed", "rows": result.validation_report["rows_loaded"]})
 
     return {

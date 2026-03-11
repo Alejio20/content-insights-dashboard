@@ -1,3 +1,9 @@
+/**
+ * @file Unit tests for the ScatterPlot component.
+ * Verifies SVG rendering with cluster data points and the empty-state
+ * fallback when the points array is empty.
+ */
+
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import ScatterPlot from '../components/ScatterPlot'

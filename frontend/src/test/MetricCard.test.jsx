@@ -1,3 +1,9 @@
+/**
+ * @file Unit tests for the MetricCard component.
+ * Verifies that label, value, and optional hint text all render
+ * correctly in the DOM.
+ */
+
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import MetricCard from '../components/MetricCard'

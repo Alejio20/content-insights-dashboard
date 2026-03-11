@@ -1,3 +1,9 @@
+/**
+ * @file Unit tests for the DataTable component.
+ * Verifies correct rendering of column headers, row data, and the
+ * empty-state message when no rows are provided.
+ */
+
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import DataTable from '../components/DataTable'

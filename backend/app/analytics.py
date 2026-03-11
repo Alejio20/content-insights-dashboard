@@ -1,3 +1,13 @@
+"""
+Core analytics engine for the Content Performance Insights Dashboard.
+
+``AnalyticsService`` operates on an in-memory pandas DataFrame and exposes
+methods for summary statistics, trend analysis, KMeans clustering,
+Isolation Forest anomaly detection, TF-IDF title similarity, A/B testing
+(Welch's t-test with effect-size reporting), experiment sweeps, and
+PDF/CSV report generation.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -20,17 +30,26 @@ from scipy import stats as scipy_stats
 
 from .config import CLUSTER_RANGE, DEFAULT_ANOMALY_CONTAMINATION, EXPERIMENT_CONTAMINATION_RANGE, RANDOM_STATE
 
+# Metrics available for A/B test comparisons.
 AB_METRICS = ["views", "engagement_rate_pct", "avg_watch_time_seconds", "like_rate", "comment_rate", "share_rate"]
 
 
 @dataclass(slots=True)
 class FilterOptions:
+    """User-supplied filter parameters passed through query strings."""
     category: str | None = None
     start_date: str | None = None
     end_date: str | None = None
 
 
 class AnalyticsService:
+    """Stateless analytics facade that wraps a video-performance DataFrame.
+
+    Each public method applies optional filters, runs one analysis pass,
+    and returns a JSON-serialisable dict.  Expensive artefacts like the
+    title-similarity matrix are lazily computed and cached on the instance.
+    """
+
     def __init__(self, df: pd.DataFrame):
         self.df = df.copy()
         self.feature_columns = [
@@ -45,6 +64,7 @@ class AnalyticsService:
         self._title_vectorizer = None
 
     def filter_frame(self, filters: FilterOptions | None = None) -> pd.DataFrame:
+        """Return a copy of the DataFrame narrowed by category and date range."""
         filters = filters or FilterOptions()
         frame = self.df.copy()
         if filters.category and filters.category.lower() != "all":
@@ -56,6 +76,7 @@ class AnalyticsService:
         return frame.reset_index(drop=True)
 
     def get_filter_options(self) -> dict[str, Any]:
+        """Return available categories, thumbnail styles, and date range for the UI filter controls."""
         return {
             "categories": ["all", *sorted(self.df["category"].unique().tolist())],
             "thumbnail_styles": sorted(self.df["thumbnail_style"].unique().tolist()),
@@ -66,6 +87,7 @@ class AnalyticsService:
         }
 
     def get_videos(self, filters: FilterOptions | None = None, limit: int = 100) -> list[dict[str, Any]]:
+        """Return the top *limit* videos sorted by views, after applying filters."""
         frame = self.filter_frame(filters).sort_values("views", ascending=False).head(limit)
         columns = [
             "video_id",
@@ -80,6 +102,7 @@ class AnalyticsService:
         return self._serialize_records(frame[columns])
 
     def get_summary(self, filters: FilterOptions | None = None) -> dict[str, Any]:
+        """Build aggregate KPIs, breakdowns by category/thumbnail/month, and recommendations."""
         frame = self.filter_frame(filters)
         if frame.empty:
             return self._empty_response()
@@ -142,6 +165,7 @@ class AnalyticsService:
         }
 
     def get_trend_analysis(self, filters: FilterOptions | None = None) -> dict[str, Any]:
+        """Compute correlations, group lifts, rolling trends, metadata signal, and title-token lift."""
         frame = self.filter_frame(filters)
         if frame.empty:
             return self._empty_response()
@@ -211,11 +235,17 @@ class AnalyticsService:
         }
 
     def get_cluster_analysis(self, filters: FilterOptions | None = None) -> dict[str, Any]:
+        """Run MiniBatchKMeans over a range of k values and pick the best by silhouette score.
+
+        Returns cluster centroids with human-readable labels and a sample
+        of up to 250 data points for the scatter-plot visualisation.
+        """
         frame = self.filter_frame(filters)
         if frame.empty:
             return self._empty_response()
 
         scaled = StandardScaler().fit_transform(frame[self.feature_columns])
+        # Sweep k values and keep the clustering with the highest silhouette score.
         best_k = 2
         best_score = -1.0
         best_labels = None
@@ -266,6 +296,7 @@ class AnalyticsService:
         }
 
     def get_anomalies(self, filters: FilterOptions | None = None, contamination: float = DEFAULT_ANOMALY_CONTAMINATION) -> dict[str, Any]:
+        """Detect anomalous videos using Isolation Forest and return the top outliers with IQR context."""
         frame = self.filter_frame(filters)
         if frame.empty:
             return self._empty_response()
@@ -307,6 +338,7 @@ class AnalyticsService:
         }
 
     def get_similar_videos(self, video_id: int, top_n: int = 5) -> dict[str, Any]:
+        """Find the *top_n* most title-similar videos using cosine similarity on TF-IDF vectors."""
         if self._similarity_matrix is None or self._title_vectorizer is None:
             self._build_title_similarity_index()
 
@@ -337,6 +369,7 @@ class AnalyticsService:
         }
 
     def _build_title_similarity_index(self) -> None:
+        """Lazily compute the pairwise cosine-similarity matrix over all video titles."""
         vectorizer = TfidfVectorizer(
             stop_words="english",
             ngram_range=(1, 2),
@@ -347,6 +380,13 @@ class AnalyticsService:
         self._similarity_matrix = cosine_similarity(matrix, dense_output=False).toarray()
 
     def _metadata_signal_score(self, frame: pd.DataFrame) -> dict[str, Any]:
+        """Estimate how much of view variance is explained by available metadata.
+
+        Fits a Ridge regression (one-hot category + thumbnail + month) on
+        log-views with 5-fold cross-validation.  A low R-squared signals
+        that performance is driven by factors not captured in the dataset
+        (e.g., recommendation algorithm, topic novelty).
+        """
         X = frame[["category", "thumbnail_style", "publish_month"]].copy()
         y = np.log1p(frame["views"])
         model = Pipeline(
@@ -389,6 +429,12 @@ class AnalyticsService:
 
     @staticmethod
     def _token_lift(frame: pd.DataFrame, target_column: str, top_n: int = 10) -> list[dict[str, Any]]:
+        """Identify title tokens disproportionately common in high-performing videos.
+
+        "Lift" = mean TF-IDF weight in the top-quartile group minus the
+        mean weight in the remaining rows.  Positive lift means the token
+        appears more often in high-performing titles.
+        """
         if frame.empty:
             return []
         threshold = frame[target_column].quantile(0.75)
@@ -410,6 +456,11 @@ class AnalyticsService:
 
     @staticmethod
     def _label_clusters(summary: pd.DataFrame) -> list[str]:
+        """Assign human-readable labels to clusters based on relative performance.
+
+        Clusters are labelled by comparing their avg views, engagement,
+        and share rate against the median of all cluster centroids.
+        """
         views_median = summary["avg_views"].median()
         engagement_median = summary["avg_engagement_rate_pct"].median()
         share_median = summary["avg_share_rate"].median()
@@ -433,6 +484,7 @@ class AnalyticsService:
         return labels
 
     def _make_recommendations(self, frame: pd.DataFrame) -> list[str]:
+        """Generate plain-English recommendations from the current data slice."""
         category = (
             frame.groupby("category")["engagement_rate_pct"].mean().sort_values(ascending=False).index[0]
         )
@@ -449,6 +501,7 @@ class AnalyticsService:
 
     @staticmethod
     def _row_to_card(row: pd.Series) -> dict[str, Any]:
+        """Convert a single DataFrame row into a JSON-safe card dict for the frontend."""
         return {
             "video_id": int(row["video_id"]),
             "title": str(row["title"]),
@@ -462,6 +515,7 @@ class AnalyticsService:
 
     @staticmethod
     def _serialize_records(frame: pd.DataFrame) -> list[dict[str, Any]]:
+        """Convert a DataFrame to a list of dicts, coercing numpy types to native Python."""
         serialized: list[dict[str, Any]] = []
         for record in frame.to_dict(orient="records"):
             clean_record: dict[str, Any] = {}
@@ -478,6 +532,7 @@ class AnalyticsService:
         return serialized
 
     def run_cluster_experiment(self, filters: FilterOptions | None = None) -> dict[str, Any]:
+        """Sweep all k values in CLUSTER_RANGE and return silhouette + inertia for each."""
         frame = self.filter_frame(filters)
         if frame.empty:
             return self._empty_response()
@@ -513,6 +568,7 @@ class AnalyticsService:
         return {"runs": runs, "feature_columns": self.feature_columns}
 
     def run_anomaly_experiment(self, filters: FilterOptions | None = None) -> dict[str, Any]:
+        """Sweep contamination rates and report how many anomalies each threshold flags."""
         frame = self.filter_frame(filters)
         if frame.empty:
             return self._empty_response()
@@ -536,6 +592,7 @@ class AnalyticsService:
         return {"runs": runs, "total_videos": len(frame)}
 
     def generate_csv_report(self, filters: FilterOptions | None = None) -> str:
+        """Export the filtered dataset as a CSV string for download."""
         frame = self.filter_frame(filters)
         if frame.empty:
             return ""
@@ -553,6 +610,7 @@ class AnalyticsService:
         return out.to_csv(index=False)
 
     def generate_pdf_report(self, filters: FilterOptions | None = None) -> bytes:
+        """Render a multi-page PDF report with charts and tables via matplotlib."""
         import io as _io
 
         import matplotlib
@@ -585,6 +643,7 @@ class AnalyticsService:
 
     @staticmethod
     def _pdf_make_table(ax, col_labels, rows, title):
+        """Draw a styled matplotlib table on the given axes with alternating row colours."""
         ax.axis("off")
         if rows:
             tbl = ax.table(cellText=rows, colLabels=col_labels, loc="center", cellLoc="left")
@@ -803,6 +862,7 @@ class AnalyticsService:
         variant_b: str = "",
         metric: str = "views",
     ) -> dict[str, Any]:
+        """Compare two attribute-based variants (thumbnail style or category) on a chosen metric."""
         frame = self.filter_frame(filters)
         if frame.empty:
             return self._empty_response()
@@ -827,6 +887,7 @@ class AnalyticsService:
         keyword_b: str = "",
         metric: str = "views",
     ) -> dict[str, Any]:
+        """Compare videos whose titles contain *keyword_a* vs *keyword_b* on a chosen metric."""
         frame = self.filter_frame(filters)
         if frame.empty:
             return self._empty_response()
@@ -856,15 +917,25 @@ class AnalyticsService:
         label_b: str,
         metric: str,
     ) -> dict[str, Any]:
+        """Run Welch's t-test between two groups and return full statistical output.
+
+        Returns descriptive stats for each group, hypothesis-test results
+        (t-statistic, p-value, significance tier), effect size (Cohen's d
+        with verbal label), a 95 % confidence interval on the mean
+        difference, and a plain-English recommendation.
+        """
         mean_a, mean_b = float(group_a.mean()), float(group_b.mean())
         std_a, std_b = float(group_a.std(ddof=1)), float(group_b.std(ddof=1))
         n_a, n_b = len(group_a), len(group_b)
 
+        # Welch's t-test (does not assume equal variance)
         t_stat, p_value = scipy_stats.ttest_ind(group_a, group_b, equal_var=False)
 
+        # Cohen's d: standardised mean difference using pooled std
         pooled_std = np.sqrt(((n_a - 1) * std_a ** 2 + (n_b - 1) * std_b ** 2) / (n_a + n_b - 2)) if (n_a + n_b) > 2 else 1.0
         cohens_d = (mean_a - mean_b) / pooled_std if pooled_std > 0 else 0.0
 
+        # 95 % confidence interval on the difference of means (Welch-Satterthwaite df)
         se_diff = np.sqrt(std_a ** 2 / n_a + std_b ** 2 / n_b)
         df = ((std_a ** 2 / n_a + std_b ** 2 / n_b) ** 2 /
               ((std_a ** 2 / n_a) ** 2 / (n_a - 1) + (std_b ** 2 / n_b) ** 2 / (n_b - 1)))
@@ -938,4 +1009,5 @@ class AnalyticsService:
 
     @staticmethod
     def _empty_response() -> dict[str, Any]:
+        """Standard response when all rows are filtered out."""
         return {"message": "No rows match the selected filters."}

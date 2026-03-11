@@ -1,5 +1,13 @@
+/**
+ * @file BarChart component.
+ * Renders a horizontal bar chart using pure CSS widths (no SVG).
+ * Accepts generic data arrays keyed by configurable x/y field names,
+ * making it reusable for category, thumbnail, and weekday breakdowns.
+ */
+
 import PropTypes from 'prop-types'
 
+/** Abbreviate large numbers to K/M notation for compact bar labels. */
 function formatNumber(value) {
   const abs = Math.abs(value)
   if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`

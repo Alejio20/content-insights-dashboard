@@ -1,3 +1,10 @@
+/**
+ * @file ESLint flat-config for the frontend source tree.
+ * Extends the recommended JS ruleset with React and React Hooks
+ * plugins, targeting browser globals and modern ECMAScript.
+ * Test files are excluded -- they have their own global context.
+ */
+
 import js from '@eslint/js'
 import reactPlugin from 'eslint-plugin-react'
 import reactHooksPlugin from 'eslint-plugin-react-hooks'

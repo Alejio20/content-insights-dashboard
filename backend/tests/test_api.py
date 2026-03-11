@@ -1,3 +1,12 @@
+"""
+Integration tests for the FastAPI backend.
+
+Each test hits a live ``TestClient`` backed by the sample CSV, verifying
+status codes, response structure, and key business invariants across
+all API endpoints (health, filters, videos, summary, trends, clusters,
+anomalies, similarity, experiments, A/B tests, reports, and uploads).
+"""
+
 from pathlib import Path
 
 from fastapi.testclient import TestClient

@@ -1,7 +1,15 @@
+/**
+ * @file ScatterPlot component.
+ * Renders an SVG scatter plot colour-coded by cluster ID with hover
+ * tooltips showing video details.  Used to visualise KMeans clustering
+ * results (views on x-axis vs. engagement rate on y-axis).
+ */
+
 import { useCallback, useRef, useState } from 'react'
 import PropTypes from 'prop-types'
 import { formatAxisValue, niceSteps } from './chartUtils'
 
+/** CSS class names cycled per cluster ID for colour differentiation. */
 const clusterClass = ['cluster-a', 'cluster-b', 'cluster-c', 'cluster-d', 'cluster-e', 'cluster-f']
 
 export default function ScatterPlot({ points, title }) {

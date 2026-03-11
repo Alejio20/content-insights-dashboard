@@ -1,3 +1,9 @@
+/**
+ * @file Vite build and dev-server configuration.
+ * Enables the React plugin for automatic JSX transform and configures
+ * Vitest to use jsdom with global test helpers for component testing.
+ */
+
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 

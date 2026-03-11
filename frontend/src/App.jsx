@@ -1,3 +1,11 @@
+/**
+ * @file Root dashboard component.
+ * Orchestrates the full dashboard layout: KPI cards, bar/line charts,
+ * scatter plots, cluster narratives, trend tables, experiment results,
+ * A/B test controls, anomaly lists, and content-similarity search.
+ * All data flows through the useDashboardData hook.
+ */
+
 import { useCallback, useMemo, useRef, useState } from 'react'
 import PropTypes from 'prop-types'
 import MetricCard from './components/MetricCard'
@@ -7,16 +15,19 @@ import ScatterPlot from './components/ScatterPlot'
 import DataTable from './components/DataTable'
 import useDashboardData, { API_BASE, buildQuery } from './hooks/useDashboardData'
 
+/** Format a number with locale-aware thousand separators. */
 function formatInteger(value) {
   return Number(value).toLocaleString()
 }
 
+/** Format a number to a fixed number of decimal places. */
 function formatFloat(value, digits = 2) {
   return Number(value).toFixed(digits)
 }
 
 /* ── Upload ───────────────────────────────────────────────────── */
 
+/** Hidden file-input wrapper that triggers CSV upload on file selection. */
 function UploadSection({ onUpload, uploading }) {
   const inputRef = useRef(null)
 
@@ -43,6 +54,7 @@ UploadSection.propTypes = {
 
 /* ── Download buttons ─────────────────────────────────────────── */
 
+/** Anchor links that trigger server-side CSV and PDF report downloads. */
 function DownloadButtons({ filters }) {
   const query = buildQuery(filters)
   const qs = query ? `?${query}` : ''
@@ -60,6 +72,7 @@ DownloadButtons.propTypes = {
 
 /* ── Overview ─────────────────────────────────────────────────── */
 
+/** Grid of KPI MetricCards (videos, views, engagement, watch time). */
 function OverviewSection({ summary }) {
   const cards = useMemo(() => {
     if (!summary?.totals) return []
@@ -86,6 +99,7 @@ OverviewSection.propTypes = {
 
 /* ── Charts ───────────────────────────────────────────────────── */
 
+/** Category/thumbnail bar charts, monthly line charts, weekday + rolling trend visuals. */
 function ChartsSection({ summary, trends }) {
   return (
     <>
@@ -123,6 +137,7 @@ ChartsSection.propTypes = {
 
 /* ── Clusters ─────────────────────────────────────────────────── */
 
+/** Scatter plot of cluster assignments paired with a narrative summary per cluster. */
 function ClusterSection({ clusters }) {
   return (
     <section className="two-column-grid">
@@ -151,6 +166,7 @@ ClusterSection.propTypes = {
 
 /* ── Trends ───────────────────────────────────────────────────── */
 
+/** Correlation table, title-token lift table, and metadata signal R-squared card. */
 function TrendsSection({ trends }) {
   return (
     <section className="three-column-grid trends-grid">
@@ -198,6 +214,7 @@ TrendsSection.propTypes = {
 
 /* ── Experiments ──────────────────────────────────────────────── */
 
+/** Side-by-side tables showing cluster k-sweep and anomaly contamination-sweep results. */
 function ExperimentSection({ clusterExperiment, anomalyExperiment }) {
   if (!clusterExperiment?.runs && !anomalyExperiment?.runs) return null
 
@@ -233,6 +250,7 @@ ExperimentSection.propTypes = {
 
 /* ── A/B Test ────────────────────────────────────────────────── */
 
+/** Dropdown options for the metric selector in the A/B test panel. */
 const AB_METRICS = [
   { value: 'views', label: 'Views' },
   { value: 'engagement_rate_pct', label: 'Engagement %' },
@@ -242,6 +260,7 @@ const AB_METRICS = [
   { value: 'share_rate', label: 'Share Rate' },
 ]
 
+/** Interactive A/B test panel: choose attribute or title-keyword mode, pick variants, and run a Welch's t-test. */
 function ABTestSection({ options, filters }) {
   const [mode, setMode] = useState('attribute')
   const [dimension, setDimension] = useState('thumbnail_style')
@@ -371,6 +390,7 @@ ABTestSection.propTypes = {
   filters: PropTypes.object.isRequired,
 }
 
+/** Renders the full A/B test result: variant stats, test output, effect size, and recommendation. */
 function ABTestResult({ result }) {
   const { variant_a: a, variant_b: b, test, effect, recommendation } = result
 
@@ -439,6 +459,7 @@ ABTestResult.propTypes = {
 
 /* ── Anomalies + Similarity ───────────────────────────────────── */
 
+/** Top-anomalies table alongside a video-similarity search panel. */
 function AnomalySection({ anomalies, similar, videos, selectedVideoId, setSelectedVideoId }) {
   return (
     <section className="two-column-grid anomaly-grid">
@@ -503,6 +524,7 @@ AnomalySection.propTypes = {
 
 /* ── App ──────────────────────────────────────────────────────── */
 
+/** Root component: wires filter controls, data hook, and all dashboard sections together. */
 export default function App() {
   const {
     options,

@@ -1,3 +1,9 @@
+/**
+ * @file Unit tests for the BarChart component.
+ * Verifies rendering of bar rows for valid data and the empty-state
+ * fallback when data is null or empty.
+ */
+
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import BarChart from '../components/BarChart'

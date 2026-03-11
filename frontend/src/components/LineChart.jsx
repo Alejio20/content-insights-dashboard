@@ -1,3 +1,10 @@
+/**
+ * @file LineChart component.
+ * Renders a responsive SVG time-series line chart with hover tooltips,
+ * evenly-spaced grid lines, and automatic axis labelling.  Uses the
+ * shared chartUtils helpers for value formatting and grid-step calculation.
+ */
+
 import { useCallback, useRef, useState } from 'react'
 import PropTypes from 'prop-types'
 import { formatAxisValue, niceSteps } from './chartUtils'

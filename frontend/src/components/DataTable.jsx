@@ -1,3 +1,10 @@
+/**
+ * @file DataTable component.
+ * Generic table that renders column headers and rows from dynamic
+ * column/row definitions.  Falls back to an empty-state message
+ * when no data is available.
+ */
+
 import PropTypes from 'prop-types'
 
 export default function DataTable({ title, columns, rows }) {
